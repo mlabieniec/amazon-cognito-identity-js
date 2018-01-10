@@ -33,6 +33,7 @@ declare module "amazon-cognito-identity-js" {
     export class CognitoUser {
         constructor(data: ICognitoUserData);
 
+        public setSignInUserSession(signInUserSession: CognitoUserSession): void;
         public getSignInUserSession(): CognitoUserSession | null;
         public getUsername(): string;
 
@@ -126,9 +127,9 @@ declare module "amazon-cognito-identity-js" {
     }
 
     export interface ICognitoUserSessionData {
-        IdToken: string;
-        AccessToken: string;
-        RefreshToken?: string;
+        IdToken: CognitoIdToken;
+        AccessToken: CognitoAccessToken;
+        RefreshToken?: CognitoRefreshToken;
     }
 
     export class CognitoUserSession {
@@ -162,5 +163,19 @@ declare module "amazon-cognito-identity-js" {
         constructor({ RefreshToken }: { RefreshToken: string });
 
         public getToken(): string;
+    }
+
+    export interface ICookieStorageData {
+        domain: string;
+        path?: string;
+        expires?: number;
+        secure?: boolean;
+    }
+    export class CookieStorage implements ICognitoStorage {
+        constructor(data: ICookieStorageData);
+        setItem(key: string, value: string): void;
+        getItem(key: string): string;
+        removeItem(key: string): void;
+        clear(): void;
     }
 }

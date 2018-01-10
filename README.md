@@ -134,6 +134,27 @@ migration.
 
 * Build your application bundle with `npm run build`
 
+## Install for React Native
+
+See [Using NPM and Webpack](https://github.com/aws/amazon-cognito-identity-js#using-npm-and-webpack) for more information on NPM.
+
+* Install and add to your dependencies the Amazon Cognito Identity SDK for JavaScript:
+
+```
+npm install --save amazon-cognito-identity-js
+```
+
+* Install react-native-cli if you have not already:
+
+```
+npm install -g react-native-cli
+```
+
+* Link the native modules to your project:
+
+```
+react-native link amazon-cognito-identity-js
+```
 
 ## Configuration
 
@@ -156,6 +177,11 @@ Note that the various errors returned by the service are valid JSON so one can a
 For an example using babel-webpack of a React setup, see [babel-webpack example](https://github.com/aws/amazon-cognito-identity-js/tree/master/examples/babel-webpack).
 
 For a working example using angular, see [cognito-angular2-quickstart](https://github.com/awslabs/aws-cognito-angular2-quickstart).
+
+For a working example using ember.js, see:
+
+- [aws-serverless-ember](https://github.com/awslabs/aws-serverless-ember).
+- [aws-mobilehub-ember](https://github.com/awslabs/aws-mobilehub-ember).
 
 If you are having issues when using Aurelia, please see the following [Stack Overflow post](http://stackoverflow.com/questions/39714424/how-can-i-get-the-amazon-cognito-identity-sdk-working-in-aurelia).
 
@@ -253,6 +279,7 @@ The usage examples below use the unqualified names for types in the Amazon Cogni
 
 **Use case 4.** Authenticating a user and establishing a user session with the Amazon Cognito Identity service.
 
+
 ```javascript
     var authenticationData = {
         Username : 'username',
@@ -283,10 +310,17 @@ The usage examples below use the unqualified names for types in the Amazon Cogni
                     'cognito-idp.<region>.amazonaws.com/<YOUR_USER_POOL_ID>' : result.getIdToken().getJwtToken()
                 }
             });
-
-            // Instantiate aws sdk service objects now that the credentials have been updated.
-            // example: var s3 = new AWS.S3();
-
+            
+            //refreshes credentials using AWS.CognitoIdentity.getCredentialsForIdentity()
+            AWS.config.credentials.refresh((error) => {
+                if (error) {
+                     console.error(error);
+                } else {
+                     // Instantiate aws sdk service objects now that the credentials have been updated.
+                     // example: var s3 = new AWS.S3();
+                     console.log('Successfully logged!');
+                }
+            });
         },
 
         onFailure: function(err) {
@@ -410,7 +444,7 @@ Note that the inputVerificationCode method needs to be defined but does not need
     cognitoUser.forgotPassword({
         onSuccess: function (data) {
             // successfully initiated reset password request
-	    console.log('CodeDeliveryData from forgotPassword: ' + data);
+	          console.log('CodeDeliveryData from forgotPassword: ' + data);
         },
         onFailure: function(err) {
             alert(err);
@@ -420,7 +454,14 @@ Note that the inputVerificationCode method needs to be defined but does not need
             console.log('Code sent to: ' + data);
             var verificationCode = prompt('Please input verification code ' ,'');
             var newPassword = prompt('Enter new password ' ,'');
-            cognitoUser.confirmPassword(verificationCode, newPassword, this);
+            cognitoUser.confirmPassword(verificationCode, newPassword, {
+                onSuccess() {
+                    console.log('Password confirmed!');
+                },
+                onFailure(err) {
+                    console.log('Password not confirmed!');
+                }
+            });
         }
     });
 ```
@@ -449,6 +490,26 @@ Note that the inputVerificationCode method needs to be defined but does not need
 
 ```javascript
     cognitoUser.globalSignOut(callback);
+```
+
+**Use case 16 with React Native.**
+
+In React Native, loading the persisted current user information requires an extra async call to be made:
+
+```javascript
+    var poolData = {
+      UserPoolId : '...', // Your user pool id here
+      ClientId : '...' // Your client id here
+    };
+    var userPool = new AWSCognito.CognitoIdentityServiceProvider.CognitoUserPool(poolData);
+    
+    userPool.storage.sync(function(err, result) {
+      if (err) { }
+      else if (result === 'SUCCESS') {
+        var cognitoUser = userPool.getCurrentUser();
+        // Continue with steps in Use case 16
+      }
+    });
 ```
 
 **Use case 16.** Retrieving the current user from local storage.
@@ -597,7 +658,7 @@ Note that the inputVerificationCode method needs to be defined but does not need
     });
 ```
 
-**Use case 23.** Authenticate a user and set new password for a user that was created using AdminCreateUser API
+**Use case 23.** Authenticate a user and set new password for a user that was created using AdminCreateUser API.
 
 ```javascript
 
@@ -629,7 +690,7 @@ Note that the inputVerificationCode method needs to be defined but does not need
         }
     });
 ```
-**Use case 24.** Retrieve the MFA Options for the user in case MFA is optional
+**Use case 24.** Retrieve the MFA Options for the user in case MFA is optional.
 
 ```javascript
     cognitoUser.getMFAOptions(function(err, mfaOptions) {
@@ -640,6 +701,138 @@ Note that the inputVerificationCode method needs to be defined but does not need
         console.log('MFA options for user ' + mfaOptions);
     });
 ```
+
+**Use case 25.** Authenticating a user with a passwordless custom flow.
+
+```javascript
+    cognitoUser.setAuthenticationFlowType('CUSTOM_AUTH');
+
+    cognitoUser.initiateAuth(authenticationDetails, {
+        onSuccess: function(result) {
+            // User authentication was successful
+        },
+        onFailure: function(err) {
+            // User authentication was not successful
+        },
+        customChallenge: function(challengeParameters) {
+            // User authentication depends on challenge response
+            var challengeResponses = 'challenge-answer'
+            cognitoUser.sendCustomChallengeAnswer(challengeResponses, this);
+        }
+    });
+```
+
+**Use case 26.** Using cookies to store cognito tokens
+
+```javascript
+```
+
+To use the CookieStorage you have to pass it in the constructor map of CognitoUserPool and CognitoUser (when constructed directly):
+
+ ```js
+  var poolData = {
+      UserPoolId : '...', // Your user pool id here
+      ClientId : '...' // Your client id here
+      Storage: new AWSCognito.CognitoIdentityServiceProvider.CookieStorage({domain: ".yourdomain.com"})
+  };
+
+  var userPool = new AWSCognito.CognitoIdentityServiceProvider.CognitoUserPool(poolData);
+
+  var userData = {
+      Username: 'username',
+      Pool: userPool,
+      Storage: new AWSCognito.CognitoIdentityServiceProvider.CookieStorage({domain: ".yourdomain.com"})
+  };
+  ```
+The CookieStorage object receives a map (data) in its constructor that may have these values:
+ * data.domain Cookies domain (mandatory)
+ * data.path Cookies path (default: '/')
+ * data.expires Cookie expiration (in days, default: 365)
+ * data.secure Cookie secure flag (default: true)
+
+**Use case 27.** Selecting the MFA method and authenticating using TOTP.
+
+ ```js
+        var authenticationData = {
+            Username : 'username',
+            Password : 'password',
+        };
+        var authenticationDetails = new AWSCognito.CognitoIdentityServiceProvider.AuthenticationDetails(authenticationData);
+        var poolData = {
+            UserPoolId : '...', // Your user pool id here
+            ClientId : '...' // Your client id here
+        };
+        var userPool = new AWSCognito.CognitoIdentityServiceProvider.CognitoUserPool(poolData);
+        var userData = {
+            Username : 'username',
+            Pool : userPool
+        };
+        var cognitoUser = new AWSCognito.CognitoIdentityServiceProvider.CognitoUser(userData);
+
+        cognitoUser.authenticateUser(authenticationDetails, {
+            onSuccess: function (result) {
+                console.log('access token + ' + result.getAccessToken().getJwtToken());
+            },
+      
+            onFailure: function(err) {
+                alert(err);
+            },
+
+            mfaSetup: function(challengeName, challengeParameters) {
+                cognitoUser.associateSoftwareToken(this);
+            },
+
+            associateSecretCode : function(secretCode) {
+                var challengeAnswer = prompt('Please input the TOTP code.' ,'');
+                cognitoUser.verifySoftwareToken(challengeAnswer, 'My TOTP device', this);
+            },
+
+            selectMFAType : function(challengeName, challengeParameters) {
+                var mfaType = prompt('Please select the MFA method.', '');
+                cognitoUser.sendMFASelectionAnswer(mfaType, this);
+            },
+
+            totpRequired : function(secretCode) {
+                var challengeAnswer = prompt('Please input the TOTP code.' ,'');
+                cognitoUser.sendMFACode(challengeAnswer, this, 'SOFTWARE_TOKEN_MFA');
+            },
+
+            mfaRequired: function(codeDeliveryDetails) {
+                var verificationCode = prompt('Please input verification code' ,'');
+                cognitoUser.sendMFACode(verificationCode, this);
+            }
+        });
+  ```
+
+**Use case 28.** Enabling and setting SMS MFA as the preferred MFA method for the user.
+
+ ```js
+        smsMfaSettings = {
+            PreferredMfa : true,
+            Enabled : true
+        };
+        cognitoUser.setUserMfaPreference(smsMfaSettings, null, function(err, result) {
+            if (err) {
+                alert(err);
+            }
+            console.log('call result ' + result)
+        });
+  ```
+
+**Use case 29.** Enabling and setting TOTP MFA as the preferred MFA method for the user.
+
+ ```js
+       	totpMfaSettings = {
+            PreferredMfa : true,
+            Enabled : true
+        };
+        cognitoUser.setUserMfaPreference(null, totpMfaSettings, function(err, result) {
+            if (err) {
+                alert(err);
+            }
+            console.log('call result ' + result)
+        });
+  ```
 
 ## Network Configuration
 The Amazon Cognito Identity JavaScript SDK will make requests to the following endpoints
@@ -653,6 +846,34 @@ For most frameworks you can whitelist the domain by whitelisting all AWS endpoin
 In order to authenticate with the Amazon Cognito Identity Service, the client needs to generate a random number as part of the SRP protocol. The AWS SDK is only compatible with modern browsers, and these include support for cryptographically strong random values. If you do need to support older browsers then you should be aware that this is less secure, and if possible include a strong polyfill for `window.crypto.getRandomValues()` before including this library.
 
 ## Change Log
+
+**v1.29.0:**
+* What has changed
+  * Fixing verify software token call to work with access token.
+
+**v1.28.0:**
+* What has changed
+  * Not sending UserContextData if it is not available.
+
+**v1.27.0:**
+* What has changed
+  * Added support for TOTP and new MFA settings APIs.
+
+**v1.26.0:**
+* What has changed
+  * Fixed typescript typings.
+
+**v1.25.0:**
+* What has changed
+  * Added cookie storage support and solved bug related to clock drift parsing.
+
+**v1.24.0:**
+* What has changed
+  * Fixed bug related to missing callback
+
+**v1.23.0:**
+* What has changed
+  * Added react native optimizations for BigInteger
 
 **v1.19.0:**
 * What has changed

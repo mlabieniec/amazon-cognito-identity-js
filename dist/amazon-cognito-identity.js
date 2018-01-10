@@ -25,7 +25,7 @@
 		exports["AmazonCognitoIdentity"] = factory(require("aws-sdk/global"), require("aws-sdk/clients/cognitoidentityserviceprovider"));
 	else
 		root["AmazonCognitoIdentity"] = factory(root["AWSCognito"], root["AWSCognito"]["CognitoIdentityServiceProvider"]);
-})(this, function(__WEBPACK_EXTERNAL_MODULE_1__, __WEBPACK_EXTERNAL_MODULE_12__) {
+})(this, function(__WEBPACK_EXTERNAL_MODULE_1__, __WEBPACK_EXTERNAL_MODULE_13__) {
 return /******/ (function(modules) { // webpackBootstrap
 /******/ 	// The module cache
 /******/ 	var installedModules = {};
@@ -76,7 +76,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	exports.__esModule = true;
 
-	var _src = __webpack_require__(15);
+	var _src = __webpack_require__(17);
 
 	Object.keys(_src).forEach(function (key) {
 	  if (key === "default" || key === "__esModule") return;
@@ -88,7 +88,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  });
 	});
 
-	var _cognitoidentityserviceprovider = __webpack_require__(12);
+	var _cognitoidentityserviceprovider = __webpack_require__(13);
 
 	var _cognitoidentityserviceprovider2 = _interopRequireDefault(_cognitoidentityserviceprovider);
 
@@ -101,13 +101,6 @@ return /******/ (function(modules) { // webpackBootstrap
 	Object.keys(enhancements).forEach(function (key) {
 	  _cognitoidentityserviceprovider2.default[key] = enhancements[key];
 	});
-
-	// The version of crypto-browserify included by aws-sdk only
-	// checks for window.crypto, not window.msCrypto as used by
-	// IE 11 – so we set it explicitly here
-	if (typeof window !== 'undefined' && !window.crypto && window.msCrypto) {
-	  window.crypto = window.msCrypto;
-	}
 
 /***/ }),
 /* 1 */
@@ -167,7 +160,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    this.k = new _BigInteger2.default(this.hexHash('00' + this.N.toString(16) + '0' + this.g.toString(16)), 16);
 
 	    this.smallAValue = this.generateRandomSmallA();
-	    this.largeAValue = this.calculateA(this.smallAValue);
+	    this.getLargeAValue(function () {});
 
 	    this.infoBits = new _global.util.Buffer('Caldera Derived Key', 'utf8');
 
@@ -184,12 +177,26 @@ return /******/ (function(modules) { // webpackBootstrap
 	  };
 
 	  /**
-	   * @returns {BigInteger} large A, a value generated from small A
+	   * @param {nodeCallback<BigInteger>} callback Called with (err, largeAValue)
+	   * @returns {void}
 	   */
 
 
-	  AuthenticationHelper.prototype.getLargeAValue = function getLargeAValue() {
-	    return this.largeAValue;
+	  AuthenticationHelper.prototype.getLargeAValue = function getLargeAValue(callback) {
+	    var _this = this;
+
+	    if (this.largeAValue) {
+	      callback(null, this.largeAValue);
+	    } else {
+	      this.calculateA(this.smallAValue, function (err, largeAValue) {
+	        if (err) {
+	          callback(err, null);
+	        }
+
+	        _this.largeAValue = largeAValue;
+	        callback(null, _this.largeAValue);
+	      });
+	    }
 	  };
 
 	  /**
@@ -250,11 +257,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	   * Generate salts and compute verifier.
 	   * @param {string} deviceGroupKey Devices to generate verifier for.
 	   * @param {string} username User to generate verifier for.
+	   * @param {nodeCallback<null>} callback Called with (err, null)
 	   * @returns {void}
 	   */
 
 
-	  AuthenticationHelper.prototype.generateHashDevice = function generateHashDevice(deviceGroupKey, username) {
+	  AuthenticationHelper.prototype.generateHashDevice = function generateHashDevice(deviceGroupKey, username, callback) {
+	    var _this2 = this;
+
 	    this.randomPassword = this.generateRandomString();
 	    var combinedString = '' + deviceGroupKey + username + ':' + this.randomPassword;
 	    var hashedString = this.hash(combinedString);
@@ -262,27 +272,40 @@ return /******/ (function(modules) { // webpackBootstrap
 	    var hexRandom = _global.util.crypto.lib.randomBytes(16).toString('hex');
 	    this.SaltToHashDevices = this.padHex(new _BigInteger2.default(hexRandom, 16));
 
-	    var verifierDevicesNotPadded = this.g.modPow(new _BigInteger2.default(this.hexHash(this.SaltToHashDevices + hashedString), 16), this.N);
+	    this.g.modPow(new _BigInteger2.default(this.hexHash(this.SaltToHashDevices + hashedString), 16), this.N, function (err, verifierDevicesNotPadded) {
+	      if (err) {
+	        callback(err, null);
+	      }
 
-	    this.verifierDevices = this.padHex(verifierDevicesNotPadded);
+	      _this2.verifierDevices = _this2.padHex(verifierDevicesNotPadded);
+	      callback(null, null);
+	    });
 	  };
 
 	  /**
 	   * Calculate the client's public value A = g^a%N
 	   * with the generated random number a
 	   * @param {BigInteger} a Randomly generated small A.
-	   * @returns {BigInteger} Computed large A.
+	   * @param {nodeCallback<BigInteger>} callback Called with (err, largeAValue)
+	   * @returns {void}
 	   * @private
 	   */
 
 
-	  AuthenticationHelper.prototype.calculateA = function calculateA(a) {
-	    var A = this.g.modPow(a, this.N);
+	  AuthenticationHelper.prototype.calculateA = function calculateA(a, callback) {
+	    var _this3 = this;
 
-	    if (A.mod(this.N).equals(_BigInteger2.default.ZERO)) {
-	      throw new Error('Illegal paramater. A mod N cannot be 0.');
-	    }
-	    return A;
+	    this.g.modPow(a, this.N, function (err, A) {
+	      if (err) {
+	        callback(err, null);
+	      }
+
+	      if (A.mod(_this3.N).equals(_BigInteger2.default.ZERO)) {
+	        callback(new Error('Illegal paramater. A mod N cannot be 0.'), null);
+	      }
+
+	      callback(null, A);
+	    });
 	  };
 
 	  /**
@@ -348,11 +371,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	   * @param {String} password Password.
 	   * @param {BigInteger} serverBValue Server B value.
 	   * @param {BigInteger} salt Generated salt.
-	   * @returns {Buffer} Computed HKDF value.
+	   * @param {nodeCallback<Buffer>} callback Called with (err, hkdfValue)
+	   * @returns {void}
 	   */
 
 
-	  AuthenticationHelper.prototype.getPasswordAuthenticationKey = function getPasswordAuthenticationKey(username, password, serverBValue, salt) {
+	  AuthenticationHelper.prototype.getPasswordAuthenticationKey = function getPasswordAuthenticationKey(username, password, serverBValue, salt, callback) {
+	    var _this4 = this;
+
 	    if (serverBValue.mod(this.N).equals(_BigInteger2.default.ZERO)) {
 	      throw new Error('B cannot be zero.');
 	    }
@@ -367,14 +393,43 @@ return /******/ (function(modules) { // webpackBootstrap
 	    var usernamePasswordHash = this.hash(usernamePassword);
 
 	    var xValue = new _BigInteger2.default(this.hexHash(this.padHex(salt) + usernamePasswordHash), 16);
+	    this.calculateS(xValue, serverBValue, function (err, sValue) {
+	      if (err) {
+	        callback(err, null);
+	      }
 
-	    var gModPowXN = this.g.modPow(xValue, this.N);
-	    var intValue2 = serverBValue.subtract(this.k.multiply(gModPowXN));
-	    var sValue = intValue2.modPow(this.smallAValue.add(this.UValue.multiply(xValue)), this.N).mod(this.N);
+	      var hkdf = _this4.computehkdf(new _global.util.Buffer(_this4.padHex(sValue), 'hex'), new _global.util.Buffer(_this4.padHex(_this4.UValue.toString(16)), 'hex'));
 
-	    var hkdf = this.computehkdf(new _global.util.Buffer(this.padHex(sValue), 'hex'), new _global.util.Buffer(this.padHex(this.UValue.toString(16)), 'hex'));
+	      callback(null, hkdf);
+	    });
+	  };
 
-	    return hkdf;
+	  /**
+	   * Calculates the S value used in getPasswordAuthenticationKey
+	   * @param {BigInteger} xValue Salted password hash value.
+	   * @param {BigInteger} serverBValue Server B value.
+	   * @param {nodeCallback<string>} callback Called on success or error.
+	   * @returns {void}
+	   */
+
+
+	  AuthenticationHelper.prototype.calculateS = function calculateS(xValue, serverBValue, callback) {
+	    var _this5 = this;
+
+	    this.g.modPow(xValue, this.N, function (err, gModPowXN) {
+	      if (err) {
+	        callback(err, null);
+	      }
+
+	      var intValue2 = serverBValue.subtract(_this5.k.multiply(gModPowXN));
+	      intValue2.modPow(_this5.smallAValue.add(_this5.UValue.multiply(xValue)), _this5.N, function (err2, result) {
+	        if (err2) {
+	          callback(err2, null);
+	        }
+
+	        callback(null, result.mod(_this5.N));
+	      });
+	    });
 	  };
 
 	  /**
@@ -1102,7 +1157,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	Montgomery.prototype.sqrTo = montSqrTo;
 
 	// (public) this^e % m (HAC 14.85)
-	function bnModPow(e, m) {
+	function bnModPow(e, m, callback) {
 	  var i = e.bitLength(),
 	      k,
 	      r = nbv(1),
@@ -1175,7 +1230,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	      }
 	    }
 	  }
-	  return z.revert(r);
+	  var result = z.revert(r);
+	  callback(null, result);
+	  return result;
 	}
 
 	// protected
@@ -1220,27 +1277,37 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	exports.__esModule = true;
 
-	var _global = __webpack_require__(1);
+	var _CognitoJwtToken2 = __webpack_require__(6);
 
-	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } } /*
-	                                                                                                                                                           * Copyright 2016 Amazon.com,
-	                                                                                                                                                           * Inc. or its affiliates. All Rights Reserved.
-	                                                                                                                                                           *
-	                                                                                                                                                           * Licensed under the Amazon Software License (the "License").
-	                                                                                                                                                           * You may not use this file except in compliance with the
-	                                                                                                                                                           * License. A copy of the License is located at
-	                                                                                                                                                           *
-	                                                                                                                                                           *     http://aws.amazon.com/asl/
-	                                                                                                                                                           *
-	                                                                                                                                                           * or in the "license" file accompanying this file. This file is
-	                                                                                                                                                           * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-	                                                                                                                                                           * CONDITIONS OF ANY KIND, express or implied. See the License
-	                                                                                                                                                           * for the specific language governing permissions and
-	                                                                                                                                                           * limitations under the License.
-	                                                                                                                                                           */
+	var _CognitoJwtToken3 = _interopRequireDefault(_CognitoJwtToken2);
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+	function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
+
+	function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; } /*
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * Copyright 2016 Amazon.com,
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * Inc. or its affiliates. All Rights Reserved.
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                *
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * Licensed under the Amazon Software License (the "License").
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * You may not use this file except in compliance with the
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * License. A copy of the License is located at
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                *
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                *     http://aws.amazon.com/asl/
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                *
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * or in the "license" file accompanying this file. This file is
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * CONDITIONS OF ANY KIND, express or implied. See the License
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * for the specific language governing permissions and
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * limitations under the License.
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                */
 
 	/** @class */
-	var CognitoAccessToken = function () {
+	var CognitoAccessToken = function (_CognitoJwtToken) {
+	  _inherits(CognitoAccessToken, _CognitoJwtToken);
+
 	  /**
 	   * Constructs a new CognitoAccessToken object
 	   * @param {string=} AccessToken The JWT access token.
@@ -1251,37 +1318,73 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	    _classCallCheck(this, CognitoAccessToken);
 
-	    // Assign object
-	    this.jwtToken = AccessToken || '';
+	    return _possibleConstructorReturn(this, _CognitoJwtToken.call(this, AccessToken || ''));
 	  }
 
-	  /**
-	   * @returns {string} the record's token.
-	   */
-
-
-	  CognitoAccessToken.prototype.getJwtToken = function getJwtToken() {
-	    return this.jwtToken;
-	  };
-
-	  /**
-	   * @returns {int} the token's expiration (exp member).
-	   */
-
-
-	  CognitoAccessToken.prototype.getExpiration = function getExpiration() {
-	    var payload = this.jwtToken.split('.')[1];
-	    var expiration = JSON.parse(_global.util.base64.decode(payload).toString('utf8'));
-	    return expiration.exp;
-	  };
-
 	  return CognitoAccessToken;
-	}();
+	}(_CognitoJwtToken3.default);
 
 	exports.default = CognitoAccessToken;
 
 /***/ }),
 /* 5 */
+/***/ (function(module, exports, __webpack_require__) {
+
+	'use strict';
+
+	exports.__esModule = true;
+
+	var _CognitoJwtToken2 = __webpack_require__(6);
+
+	var _CognitoJwtToken3 = _interopRequireDefault(_CognitoJwtToken2);
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+	function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
+
+	function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; } /*!
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * Copyright 2016 Amazon.com,
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * Inc. or its affiliates. All Rights Reserved.
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                *
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * Licensed under the Amazon Software License (the "License").
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * You may not use this file except in compliance with the
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * License. A copy of the License is located at
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                *
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                *     http://aws.amazon.com/asl/
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                *
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * or in the "license" file accompanying this file. This file is
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * CONDITIONS OF ANY KIND, express or implied. See the License
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * for the specific language governing permissions and
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                * limitations under the License.
+	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                */
+
+	/** @class */
+	var CognitoIdToken = function (_CognitoJwtToken) {
+	  _inherits(CognitoIdToken, _CognitoJwtToken);
+
+	  /**
+	   * Constructs a new CognitoIdToken object
+	   * @param {string=} IdToken The JWT Id token
+	   */
+	  function CognitoIdToken() {
+	    var _ref = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {},
+	        IdToken = _ref.IdToken;
+
+	    _classCallCheck(this, CognitoIdToken);
+
+	    return _possibleConstructorReturn(this, _CognitoJwtToken.call(this, IdToken || ''));
+	  }
+
+	  return CognitoIdToken;
+	}(_CognitoJwtToken3.default);
+
+	exports.default = CognitoIdToken;
+
+/***/ }),
+/* 6 */
 /***/ (function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -1308,19 +1411,17 @@ return /******/ (function(modules) { // webpackBootstrap
 	                                                                                                                                                           */
 
 	/** @class */
-	var CognitoIdToken = function () {
+	var CognitoJwtToken = function () {
 	  /**
-	   * Constructs a new CognitoIdToken object
-	   * @param {string=} IdToken The JWT Id token
+	   * Constructs a new CognitoJwtToken object
+	   * @param {string=} token The JWT token.
 	   */
-	  function CognitoIdToken() {
-	    var _ref = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {},
-	        IdToken = _ref.IdToken;
-
-	    _classCallCheck(this, CognitoIdToken);
+	  function CognitoJwtToken(token) {
+	    _classCallCheck(this, CognitoJwtToken);
 
 	    // Assign object
-	    this.jwtToken = IdToken || '';
+	    this.jwtToken = token || '';
+	    this.payload = this.decodePayload();
 	  }
 
 	  /**
@@ -1328,7 +1429,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	   */
 
 
-	  CognitoIdToken.prototype.getJwtToken = function getJwtToken() {
+	  CognitoJwtToken.prototype.getJwtToken = function getJwtToken() {
 	    return this.jwtToken;
 	  };
 
@@ -1337,19 +1438,40 @@ return /******/ (function(modules) { // webpackBootstrap
 	   */
 
 
-	  CognitoIdToken.prototype.getExpiration = function getExpiration() {
-	    var payload = this.jwtToken.split('.')[1];
-	    var expiration = JSON.parse(_global.util.base64.decode(payload).toString('utf8'));
-	    return expiration.exp;
+	  CognitoJwtToken.prototype.getExpiration = function getExpiration() {
+	    return this.payload.exp;
 	  };
 
-	  return CognitoIdToken;
+	  /**
+	   * @returns {int} the token's "issued at" (iat member).
+	   */
+
+
+	  CognitoJwtToken.prototype.getIssuedAt = function getIssuedAt() {
+	    return this.payload.iat;
+	  };
+
+	  /**
+	   * @returns {object} the token's payload.
+	   */
+
+
+	  CognitoJwtToken.prototype.decodePayload = function decodePayload() {
+	    var payload = this.jwtToken.split('.')[1];
+	    try {
+	      return JSON.parse(_global.util.base64.decode(payload).toString('utf8'));
+	    } catch (err) {
+	      return {};
+	    }
+	  };
+
+	  return CognitoJwtToken;
 	}();
 
-	exports.default = CognitoIdToken;
+	exports.default = CognitoJwtToken;
 
 /***/ }),
-/* 6 */
+/* 7 */
 /***/ (function(module, exports) {
 
 	'use strict';
@@ -1406,7 +1528,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	exports.default = CognitoRefreshToken;
 
 /***/ }),
-/* 7 */
+/* 8 */
 /***/ (function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -1431,23 +1553,23 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	var _CognitoIdToken2 = _interopRequireDefault(_CognitoIdToken);
 
-	var _CognitoRefreshToken = __webpack_require__(6);
+	var _CognitoRefreshToken = __webpack_require__(7);
 
 	var _CognitoRefreshToken2 = _interopRequireDefault(_CognitoRefreshToken);
 
-	var _CognitoUserSession = __webpack_require__(9);
+	var _CognitoUserSession = __webpack_require__(10);
 
 	var _CognitoUserSession2 = _interopRequireDefault(_CognitoUserSession);
 
-	var _DateHelper = __webpack_require__(10);
+	var _DateHelper = __webpack_require__(11);
 
 	var _DateHelper2 = _interopRequireDefault(_DateHelper);
 
-	var _CognitoUserAttribute = __webpack_require__(8);
+	var _CognitoUserAttribute = __webpack_require__(9);
 
 	var _CognitoUserAttribute2 = _interopRequireDefault(_CognitoUserAttribute);
 
-	var _StorageHelper = __webpack_require__(11);
+	var _StorageHelper = __webpack_require__(12);
 
 	var _StorageHelper2 = _interopRequireDefault(_StorageHelper);
 
@@ -1538,6 +1660,19 @@ return /******/ (function(modules) { // webpackBootstrap
 	  }
 
 	  /**
+	   * Sets the session for this user
+	   * @param {CognitoUserSession} signInUserSession the session
+	   * @returns {void}
+	   */
+
+
+	  CognitoUser.prototype.setSignInUserSession = function setSignInUserSession(signInUserSession) {
+	    this.clearCachedTokens();
+	    this.signInUserSession = signInUserSession;
+	    this.cacheTokens();
+	  };
+
+	  /**
 	   * @returns {CognitoUserSession} the current session for this user
 	   */
 
@@ -1593,12 +1728,17 @@ return /******/ (function(modules) { // webpackBootstrap
 	    var authParameters = authDetails.getAuthParameters();
 	    authParameters.USERNAME = this.username;
 
-	    this.client.makeUnauthenticatedRequest('initiateAuth', {
+	    var jsonReq = {
 	      AuthFlow: 'CUSTOM_AUTH',
 	      ClientId: this.pool.getClientId(),
 	      AuthParameters: authParameters,
 	      ClientMetadata: authDetails.getValidationData()
-	    }, function (err, data) {
+	    };
+	    if (this.getUserContextData()) {
+	      jsonReq.UserContextData = this.getUserContextData();
+	    }
+
+	    this.client.makeUnauthenticatedRequest('initiateAuth', jsonReq, function (err, data) {
 	      if (err) {
 	        return callback.onFailure(err);
 	      }
@@ -1647,93 +1787,117 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }
 
 	    authParameters.USERNAME = this.username;
-	    authParameters.SRP_A = authenticationHelper.getLargeAValue().toString(16);
-
-	    if (this.authenticationFlowType === 'CUSTOM_AUTH') {
-	      authParameters.CHALLENGE_NAME = 'SRP_A';
-	    }
-
-	    this.client.makeUnauthenticatedRequest('initiateAuth', {
-	      AuthFlow: this.authenticationFlowType,
-	      ClientId: this.pool.getClientId(),
-	      AuthParameters: authParameters,
-	      ClientMetadata: authDetails.getValidationData()
-	    }, function (err, data) {
-	      if (err) {
-	        return callback.onFailure(err);
+	    authenticationHelper.getLargeAValue(function (errOnAValue, aValue) {
+	      // getLargeAValue callback start
+	      if (errOnAValue) {
+	        callback.onFailure(errOnAValue);
 	      }
 
-	      var challengeParameters = data.ChallengeParameters;
+	      authParameters.SRP_A = aValue.toString(16);
 
-	      _this2.username = challengeParameters.USER_ID_FOR_SRP;
-	      serverBValue = new _BigInteger2.default(challengeParameters.SRP_B, 16);
-	      salt = new _BigInteger2.default(challengeParameters.SALT, 16);
-	      _this2.getCachedDeviceKeyAndPassword();
-
-	      var hkdf = authenticationHelper.getPasswordAuthenticationKey(_this2.username, authDetails.getPassword(), serverBValue, salt);
-
-	      var dateNow = dateHelper.getNowString();
-
-	      var signatureString = _global.util.crypto.hmac(hkdf, _global.util.buffer.concat([new _global.util.Buffer(_this2.pool.getUserPoolId().split('_')[1], 'utf8'), new _global.util.Buffer(_this2.username, 'utf8'), new _global.util.Buffer(challengeParameters.SECRET_BLOCK, 'base64'), new _global.util.Buffer(dateNow, 'utf8')]), 'base64', 'sha256');
-
-	      var challengeResponses = {};
-
-	      challengeResponses.USERNAME = _this2.username;
-	      challengeResponses.PASSWORD_CLAIM_SECRET_BLOCK = challengeParameters.SECRET_BLOCK;
-	      challengeResponses.TIMESTAMP = dateNow;
-	      challengeResponses.PASSWORD_CLAIM_SIGNATURE = signatureString;
-
-	      if (_this2.deviceKey != null) {
-	        challengeResponses.DEVICE_KEY = _this2.deviceKey;
+	      if (_this2.authenticationFlowType === 'CUSTOM_AUTH') {
+	        authParameters.CHALLENGE_NAME = 'SRP_A';
 	      }
 
-	      var respondToAuthChallenge = function respondToAuthChallenge(challenge, challengeCallback) {
-	        return _this2.client.makeUnauthenticatedRequest('respondToAuthChallenge', challenge, function (errChallenge, dataChallenge) {
-	          if (errChallenge && errChallenge.code === 'ResourceNotFoundException' && errChallenge.message.toLowerCase().indexOf('device') !== -1) {
-	            challengeResponses.DEVICE_KEY = null;
-	            _this2.deviceKey = null;
-	            _this2.randomPassword = null;
-	            _this2.deviceGroupKey = null;
-	            _this2.clearCachedDeviceKeyAndPassword();
-	            return respondToAuthChallenge(challenge, challengeCallback);
-	          }
-	          return challengeCallback(errChallenge, dataChallenge);
-	        });
-	      };
-
-	      respondToAuthChallenge({
-	        ChallengeName: 'PASSWORD_VERIFIER',
+	      var jsonReq = {
+	        AuthFlow: _this2.authenticationFlowType,
 	        ClientId: _this2.pool.getClientId(),
-	        ChallengeResponses: challengeResponses,
-	        Session: data.Session
-	      }, function (errAuthenticate, dataAuthenticate) {
-	        if (errAuthenticate) {
-	          return callback.onFailure(errAuthenticate);
+	        AuthParameters: authParameters,
+	        ClientMetadata: authDetails.getValidationData()
+	      };
+	      if (_this2.getUserContextData(_this2.username)) {
+	        jsonReq.UserContextData = _this2.getUserContextData(_this2.username);
+	      }
+
+	      _this2.client.makeUnauthenticatedRequest('initiateAuth', jsonReq, function (err, data) {
+	        if (err) {
+	          return callback.onFailure(err);
 	        }
 
-	        var challengeName = dataAuthenticate.ChallengeName;
-	        if (challengeName === 'NEW_PASSWORD_REQUIRED') {
-	          _this2.Session = dataAuthenticate.Session;
-	          var userAttributes = null;
-	          var rawRequiredAttributes = null;
-	          var requiredAttributes = [];
-	          var userAttributesPrefix = authenticationHelper.getNewPasswordRequiredChallengeUserAttributePrefix();
+	        var challengeParameters = data.ChallengeParameters;
 
-	          if (dataAuthenticate.ChallengeParameters) {
-	            userAttributes = JSON.parse(dataAuthenticate.ChallengeParameters.userAttributes);
-	            rawRequiredAttributes = JSON.parse(dataAuthenticate.ChallengeParameters.requiredAttributes);
+	        _this2.username = challengeParameters.USER_ID_FOR_SRP;
+	        serverBValue = new _BigInteger2.default(challengeParameters.SRP_B, 16);
+	        salt = new _BigInteger2.default(challengeParameters.SALT, 16);
+	        _this2.getCachedDeviceKeyAndPassword();
+
+	        authenticationHelper.getPasswordAuthenticationKey(_this2.username, authDetails.getPassword(), serverBValue, salt, function (errOnHkdf, hkdf) {
+	          // getPasswordAuthenticationKey callback start
+	          if (errOnHkdf) {
+	            callback.onFailure(errOnHkdf);
 	          }
 
-	          if (rawRequiredAttributes) {
-	            for (var i = 0; i < rawRequiredAttributes.length; i++) {
-	              requiredAttributes[i] = rawRequiredAttributes[i].substr(userAttributesPrefix.length);
+	          var dateNow = dateHelper.getNowString();
+
+	          var signatureString = _global.util.crypto.hmac(hkdf, _global.util.buffer.concat([new _global.util.Buffer(_this2.pool.getUserPoolId().split('_')[1], 'utf8'), new _global.util.Buffer(_this2.username, 'utf8'), new _global.util.Buffer(challengeParameters.SECRET_BLOCK, 'base64'), new _global.util.Buffer(dateNow, 'utf8')]), 'base64', 'sha256');
+
+	          var challengeResponses = {};
+
+	          challengeResponses.USERNAME = _this2.username;
+	          challengeResponses.PASSWORD_CLAIM_SECRET_BLOCK = challengeParameters.SECRET_BLOCK;
+	          challengeResponses.TIMESTAMP = dateNow;
+	          challengeResponses.PASSWORD_CLAIM_SIGNATURE = signatureString;
+
+	          if (_this2.deviceKey != null) {
+	            challengeResponses.DEVICE_KEY = _this2.deviceKey;
+	          }
+
+	          var respondToAuthChallenge = function respondToAuthChallenge(challenge, challengeCallback) {
+	            return _this2.client.makeUnauthenticatedRequest('respondToAuthChallenge', challenge, function (errChallenge, dataChallenge) {
+	              if (errChallenge && errChallenge.code === 'ResourceNotFoundException' && errChallenge.message.toLowerCase().indexOf('device') !== -1) {
+	                challengeResponses.DEVICE_KEY = null;
+	                _this2.deviceKey = null;
+	                _this2.randomPassword = null;
+	                _this2.deviceGroupKey = null;
+	                _this2.clearCachedDeviceKeyAndPassword();
+	                return respondToAuthChallenge(challenge, challengeCallback);
+	              }
+	              return challengeCallback(errChallenge, dataChallenge);
+	            });
+	          };
+
+	          var jsonReqResp = {
+	            ChallengeName: 'PASSWORD_VERIFIER',
+	            ClientId: _this2.pool.getClientId(),
+	            ChallengeResponses: challengeResponses,
+	            Session: data.Session
+	          };
+	          if (_this2.getUserContextData()) {
+	            jsonReqResp.UserContextData = _this2.getUserContextData();
+	          }
+	          respondToAuthChallenge(jsonReqResp, function (errAuthenticate, dataAuthenticate) {
+	            if (errAuthenticate) {
+	              return callback.onFailure(errAuthenticate);
 	            }
-	          }
-	          return callback.newPasswordRequired(userAttributes, requiredAttributes);
-	        }
-	        return _this2.authenticateUserInternal(dataAuthenticate, authenticationHelper, callback);
+
+	            var challengeName = dataAuthenticate.ChallengeName;
+	            if (challengeName === 'NEW_PASSWORD_REQUIRED') {
+	              _this2.Session = dataAuthenticate.Session;
+	              var userAttributes = null;
+	              var rawRequiredAttributes = null;
+	              var requiredAttributes = [];
+	              var userAttributesPrefix = authenticationHelper.getNewPasswordRequiredChallengeUserAttributePrefix();
+
+	              if (dataAuthenticate.ChallengeParameters) {
+	                userAttributes = JSON.parse(dataAuthenticate.ChallengeParameters.userAttributes);
+	                rawRequiredAttributes = JSON.parse(dataAuthenticate.ChallengeParameters.requiredAttributes);
+	              }
+
+	              if (rawRequiredAttributes) {
+	                for (var i = 0; i < rawRequiredAttributes.length; i++) {
+	                  requiredAttributes[i] = rawRequiredAttributes[i].substr(userAttributesPrefix.length);
+	                }
+	              }
+	              return callback.newPasswordRequired(userAttributes, requiredAttributes);
+	            }
+	            return _this2.authenticateUserInternal(dataAuthenticate, authenticationHelper, callback);
+	          });
+	          return undefined;
+	          // getPasswordAuthenticationKey callback end
+	        });
+	        return undefined;
 	      });
-	      return undefined;
+	      // getLargeAValue callback end
 	    });
 	  };
 
@@ -1758,6 +1922,21 @@ return /******/ (function(modules) { // webpackBootstrap
 	      return callback.mfaRequired(challengeName, challengeParameters);
 	    }
 
+	    if (challengeName === 'SELECT_MFA_TYPE') {
+	      this.Session = dataAuthenticate.Session;
+	      return callback.selectMFAType(challengeName, challengeParameters);
+	    }
+
+	    if (challengeName === 'MFA_SETUP') {
+	      this.Session = dataAuthenticate.Session;
+	      return callback.mfaSetup(challengeName, challengeParameters);
+	    }
+
+	    if (challengeName === 'SOFTWARE_TOKEN_MFA') {
+	      this.Session = dataAuthenticate.Session;
+	      return callback.totpRequired(challengeName, challengeParameters);
+	    }
+
 	    if (challengeName === 'CUSTOM_CHALLENGE') {
 	      this.Session = dataAuthenticate.Session;
 	      return callback.customChallenge(challengeParameters);
@@ -1776,33 +1955,38 @@ return /******/ (function(modules) { // webpackBootstrap
 	      return callback.onSuccess(this.signInUserSession);
 	    }
 
-	    authenticationHelper.generateHashDevice(dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceGroupKey, dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceKey);
-
-	    var deviceSecretVerifierConfig = {
-	      Salt: new _global.util.Buffer(authenticationHelper.getSaltDevices(), 'hex').toString('base64'),
-	      PasswordVerifier: new _global.util.Buffer(authenticationHelper.getVerifierDevices(), 'hex').toString('base64')
-	    };
-
-	    this.verifierDevices = deviceSecretVerifierConfig.PasswordVerifier;
-	    this.deviceGroupKey = newDeviceMetadata.DeviceGroupKey;
-	    this.randomPassword = authenticationHelper.getRandomPassword();
-
-	    this.client.makeUnauthenticatedRequest('confirmDevice', {
-	      DeviceKey: newDeviceMetadata.DeviceKey,
-	      AccessToken: this.signInUserSession.getAccessToken().getJwtToken(),
-	      DeviceSecretVerifierConfig: deviceSecretVerifierConfig,
-	      DeviceName: navigator.userAgent
-	    }, function (errConfirm, dataConfirm) {
-	      if (errConfirm) {
-	        return callback.onFailure(errConfirm);
+	    authenticationHelper.generateHashDevice(dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceGroupKey, dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceKey, function (errGenHash) {
+	      if (errGenHash) {
+	        return callback.onFailure(errGenHash);
 	      }
 
-	      _this3.deviceKey = dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceKey;
-	      _this3.cacheDeviceKeyAndPassword();
-	      if (dataConfirm.UserConfirmationNecessary === true) {
-	        return callback.onSuccess(_this3.signInUserSession, dataConfirm.UserConfirmationNecessary);
-	      }
-	      return callback.onSuccess(_this3.signInUserSession);
+	      var deviceSecretVerifierConfig = {
+	        Salt: new _global.util.Buffer(authenticationHelper.getSaltDevices(), 'hex').toString('base64'),
+	        PasswordVerifier: new _global.util.Buffer(authenticationHelper.getVerifierDevices(), 'hex').toString('base64')
+	      };
+
+	      _this3.verifierDevices = deviceSecretVerifierConfig.PasswordVerifier;
+	      _this3.deviceGroupKey = newDeviceMetadata.DeviceGroupKey;
+	      _this3.randomPassword = authenticationHelper.getRandomPassword();
+
+	      _this3.client.makeUnauthenticatedRequest('confirmDevice', {
+	        DeviceKey: newDeviceMetadata.DeviceKey,
+	        AccessToken: _this3.signInUserSession.getAccessToken().getJwtToken(),
+	        DeviceSecretVerifierConfig: deviceSecretVerifierConfig,
+	        DeviceName: navigator.userAgent
+	      }, function (errConfirm, dataConfirm) {
+	        if (errConfirm) {
+	          return callback.onFailure(errConfirm);
+	        }
+
+	        _this3.deviceKey = dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceKey;
+	        _this3.cacheDeviceKeyAndPassword();
+	        if (dataConfirm.UserConfirmationNecessary === true) {
+	          return callback.onSuccess(_this3.signInUserSession, dataConfirm.UserConfirmationNecessary);
+	        }
+	        return callback.onSuccess(_this3.signInUserSession);
+	      });
+	      return undefined;
 	    });
 	    return undefined;
 	  };
@@ -1841,12 +2025,17 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	    finalUserAttributes.NEW_PASSWORD = newPassword;
 	    finalUserAttributes.USERNAME = this.username;
-	    this.client.makeUnauthenticatedRequest('respondToAuthChallenge', {
+	    var jsonReq = {
 	      ChallengeName: 'NEW_PASSWORD_REQUIRED',
 	      ClientId: this.pool.getClientId(),
 	      ChallengeResponses: finalUserAttributes,
 	      Session: this.Session
-	    }, function (errAuthenticate, dataAuthenticate) {
+	    };
+	    if (this.getUserContextData()) {
+	      jsonReq.UserContextData = this.getUserContextData();
+	    }
+
+	    this.client.makeUnauthenticatedRequest('respondToAuthChallenge', jsonReq, function (errAuthenticate, dataAuthenticate) {
 	      if (errAuthenticate) {
 	        return callback.onFailure(errAuthenticate);
 	      }
@@ -1877,52 +2066,76 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	    authParameters.USERNAME = this.username;
 	    authParameters.DEVICE_KEY = this.deviceKey;
-	    authParameters.SRP_A = authenticationHelper.getLargeAValue().toString(16);
-
-	    this.client.makeUnauthenticatedRequest('respondToAuthChallenge', {
-	      ChallengeName: 'DEVICE_SRP_AUTH',
-	      ClientId: this.pool.getClientId(),
-	      ChallengeResponses: authParameters
-	    }, function (err, data) {
-	      if (err) {
-	        return callback.onFailure(err);
+	    authenticationHelper.getLargeAValue(function (errAValue, aValue) {
+	      // getLargeAValue callback start
+	      if (errAValue) {
+	        callback.onFailure(errAValue);
 	      }
 
-	      var challengeParameters = data.ChallengeParameters;
+	      authParameters.SRP_A = aValue.toString(16);
 
-	      var serverBValue = new _BigInteger2.default(challengeParameters.SRP_B, 16);
-	      var salt = new _BigInteger2.default(challengeParameters.SALT, 16);
-
-	      var hkdf = authenticationHelper.getPasswordAuthenticationKey(_this5.deviceKey, _this5.randomPassword, serverBValue, salt);
-
-	      var dateNow = dateHelper.getNowString();
-
-	      var signatureString = _global.util.crypto.hmac(hkdf, _global.util.buffer.concat([new _global.util.Buffer(_this5.deviceGroupKey, 'utf8'), new _global.util.Buffer(_this5.deviceKey, 'utf8'), new _global.util.Buffer(challengeParameters.SECRET_BLOCK, 'base64'), new _global.util.Buffer(dateNow, 'utf8')]), 'base64', 'sha256');
-
-	      var challengeResponses = {};
-
-	      challengeResponses.USERNAME = _this5.username;
-	      challengeResponses.PASSWORD_CLAIM_SECRET_BLOCK = challengeParameters.SECRET_BLOCK;
-	      challengeResponses.TIMESTAMP = dateNow;
-	      challengeResponses.PASSWORD_CLAIM_SIGNATURE = signatureString;
-	      challengeResponses.DEVICE_KEY = _this5.deviceKey;
-
-	      _this5.client.makeUnauthenticatedRequest('respondToAuthChallenge', {
-	        ChallengeName: 'DEVICE_PASSWORD_VERIFIER',
+	      var jsonReq = {
+	        ChallengeName: 'DEVICE_SRP_AUTH',
 	        ClientId: _this5.pool.getClientId(),
-	        ChallengeResponses: challengeResponses,
-	        Session: data.Session
-	      }, function (errAuthenticate, dataAuthenticate) {
-	        if (errAuthenticate) {
-	          return callback.onFailure(errAuthenticate);
+	        ChallengeResponses: authParameters
+	      };
+	      if (_this5.getUserContextData()) {
+	        jsonReq.UserContextData = _this5.getUserContextData();
+	      }
+	      _this5.client.makeUnauthenticatedRequest('respondToAuthChallenge', jsonReq, function (err, data) {
+	        if (err) {
+	          return callback.onFailure(err);
 	        }
 
-	        _this5.signInUserSession = _this5.getCognitoUserSession(dataAuthenticate.AuthenticationResult);
-	        _this5.cacheTokens();
+	        var challengeParameters = data.ChallengeParameters;
 
-	        return callback.onSuccess(_this5.signInUserSession);
+	        var serverBValue = new _BigInteger2.default(challengeParameters.SRP_B, 16);
+	        var salt = new _BigInteger2.default(challengeParameters.SALT, 16);
+
+	        authenticationHelper.getPasswordAuthenticationKey(_this5.deviceKey, _this5.randomPassword, serverBValue, salt, function (errHkdf, hkdf) {
+	          // getPasswordAuthenticationKey callback start
+	          if (errHkdf) {
+	            return callback.onFailure(errHkdf);
+	          }
+
+	          var dateNow = dateHelper.getNowString();
+
+	          var signatureString = _global.util.crypto.hmac(hkdf, _global.util.buffer.concat([new _global.util.Buffer(_this5.deviceGroupKey, 'utf8'), new _global.util.Buffer(_this5.deviceKey, 'utf8'), new _global.util.Buffer(challengeParameters.SECRET_BLOCK, 'base64'), new _global.util.Buffer(dateNow, 'utf8')]), 'base64', 'sha256');
+
+	          var challengeResponses = {};
+
+	          challengeResponses.USERNAME = _this5.username;
+	          challengeResponses.PASSWORD_CLAIM_SECRET_BLOCK = challengeParameters.SECRET_BLOCK;
+	          challengeResponses.TIMESTAMP = dateNow;
+	          challengeResponses.PASSWORD_CLAIM_SIGNATURE = signatureString;
+	          challengeResponses.DEVICE_KEY = _this5.deviceKey;
+
+	          var jsonReqResp = {
+	            ChallengeName: 'DEVICE_PASSWORD_VERIFIER',
+	            ClientId: _this5.pool.getClientId(),
+	            ChallengeResponses: challengeResponses,
+	            Session: data.Session
+	          };
+	          if (_this5.getUserContextData()) {
+	            jsonReqResp.UserContextData = _this5.getUserContextData();
+	          }
+
+	          _this5.client.makeUnauthenticatedRequest('respondToAuthChallenge', jsonReqResp, function (errAuthenticate, dataAuthenticate) {
+	            if (errAuthenticate) {
+	              return callback.onFailure(errAuthenticate);
+	            }
+
+	            _this5.signInUserSession = _this5.getCognitoUserSession(dataAuthenticate.AuthenticationResult);
+	            _this5.cacheTokens();
+
+	            return callback.onSuccess(_this5.signInUserSession);
+	          });
+	          return undefined;
+	          // getPasswordAuthenticationKey callback end
+	        });
+	        return undefined;
 	      });
-	      return undefined;
+	      // getLargeAValue callback end
 	    });
 	  };
 
@@ -1936,12 +2149,16 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 	  CognitoUser.prototype.confirmRegistration = function confirmRegistration(confirmationCode, forceAliasCreation, callback) {
-	    this.client.makeUnauthenticatedRequest('confirmSignUp', {
+	    var jsonReq = {
 	      ClientId: this.pool.getClientId(),
 	      ConfirmationCode: confirmationCode,
 	      Username: this.username,
 	      ForceAliasCreation: forceAliasCreation
-	    }, function (err) {
+	    };
+	    if (this.getUserContextData()) {
+	      jsonReq.UserContextData = this.getUserContextData();
+	    }
+	    this.client.makeUnauthenticatedRequest('confirmSignUp', jsonReq, function (err) {
 	      if (err) {
 	        return callback(err, null);
 	      }
@@ -1967,13 +2184,16 @@ return /******/ (function(modules) { // webpackBootstrap
 	    var challengeResponses = {};
 	    challengeResponses.USERNAME = this.username;
 	    challengeResponses.ANSWER = answerChallenge;
-
-	    this.client.makeUnauthenticatedRequest('respondToAuthChallenge', {
+	    var jsonReq = {
 	      ChallengeName: 'CUSTOM_CHALLENGE',
 	      ChallengeResponses: challengeResponses,
 	      ClientId: this.pool.getClientId(),
 	      Session: this.Session
-	    }, function (err, data) {
+	    };
+	    if (this.getUserContextData()) {
+	      jsonReq.UserContextData = this.getUserContextData();
+	    }
+	    this.client.makeUnauthenticatedRequest('respondToAuthChallenge', jsonReq, function (err, data) {
 	      if (err) {
 	        return callback.onFailure(err);
 	      }
@@ -1995,29 +2215,39 @@ return /******/ (function(modules) { // webpackBootstrap
 	   * This is used by the user once he has an MFA code
 	   * @param {string} confirmationCode The MFA code entered by the user.
 	   * @param {object} callback Result callback map.
+	   * @param {string} mfaType The mfa we are replying to.
 	   * @param {onFailure} callback.onFailure Called on any error.
 	   * @param {authSuccess} callback.onSuccess Called on success with the new session.
 	   * @returns {void}
 	   */
 
 
-	  CognitoUser.prototype.sendMFACode = function sendMFACode(confirmationCode, callback) {
+	  CognitoUser.prototype.sendMFACode = function sendMFACode(confirmationCode, callback, mfaType) {
 	    var _this7 = this;
 
 	    var challengeResponses = {};
 	    challengeResponses.USERNAME = this.username;
 	    challengeResponses.SMS_MFA_CODE = confirmationCode;
+	    var mfaTypeSelection = mfaType || 'SMS_MFA';
+	    if (mfaTypeSelection === 'SOFTWARE_TOKEN_MFA') {
+	      challengeResponses.SOFTWARE_TOKEN_MFA_CODE = confirmationCode;
+	    }
 
 	    if (this.deviceKey != null) {
 	      challengeResponses.DEVICE_KEY = this.deviceKey;
 	    }
 
-	    this.client.makeUnauthenticatedRequest('respondToAuthChallenge', {
-	      ChallengeName: 'SMS_MFA',
+	    var jsonReq = {
+	      ChallengeName: mfaTypeSelection,
 	      ChallengeResponses: challengeResponses,
 	      ClientId: this.pool.getClientId(),
 	      Session: this.Session
-	    }, function (err, dataAuthenticate) {
+	    };
+	    if (this.getUserContextData()) {
+	      jsonReq.UserContextData = this.getUserContextData();
+	    }
+
+	    this.client.makeUnauthenticatedRequest('respondToAuthChallenge', jsonReq, function (err, dataAuthenticate) {
 	      if (err) {
 	        return callback.onFailure(err);
 	      }
@@ -2037,33 +2267,38 @@ return /******/ (function(modules) { // webpackBootstrap
 	      }
 
 	      var authenticationHelper = new _AuthenticationHelper2.default(_this7.pool.getUserPoolId().split('_')[1]);
-	      authenticationHelper.generateHashDevice(dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceGroupKey, dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceKey);
-
-	      var deviceSecretVerifierConfig = {
-	        Salt: new _global.util.Buffer(authenticationHelper.getSaltDevices(), 'hex').toString('base64'),
-	        PasswordVerifier: new _global.util.Buffer(authenticationHelper.getVerifierDevices(), 'hex').toString('base64')
-	      };
-
-	      _this7.verifierDevices = deviceSecretVerifierConfig.PasswordVerifier;
-	      _this7.deviceGroupKey = dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceGroupKey;
-	      _this7.randomPassword = authenticationHelper.getRandomPassword();
-
-	      _this7.client.makeUnauthenticatedRequest('confirmDevice', {
-	        DeviceKey: dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceKey,
-	        AccessToken: _this7.signInUserSession.getAccessToken().getJwtToken(),
-	        DeviceSecretVerifierConfig: deviceSecretVerifierConfig,
-	        DeviceName: navigator.userAgent
-	      }, function (errConfirm, dataConfirm) {
-	        if (errConfirm) {
-	          return callback.onFailure(errConfirm);
+	      authenticationHelper.generateHashDevice(dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceGroupKey, dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceKey, function (errGenHash) {
+	        if (errGenHash) {
+	          return callback.onFailure(errGenHash);
 	        }
 
-	        _this7.deviceKey = dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceKey;
-	        _this7.cacheDeviceKeyAndPassword();
-	        if (dataConfirm.UserConfirmationNecessary === true) {
-	          return callback.onSuccess(_this7.signInUserSession, dataConfirm.UserConfirmationNecessary);
-	        }
-	        return callback.onSuccess(_this7.signInUserSession);
+	        var deviceSecretVerifierConfig = {
+	          Salt: new _global.util.Buffer(authenticationHelper.getSaltDevices(), 'hex').toString('base64'),
+	          PasswordVerifier: new _global.util.Buffer(authenticationHelper.getVerifierDevices(), 'hex').toString('base64')
+	        };
+
+	        _this7.verifierDevices = deviceSecretVerifierConfig.PasswordVerifier;
+	        _this7.deviceGroupKey = dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceGroupKey;
+	        _this7.randomPassword = authenticationHelper.getRandomPassword();
+
+	        _this7.client.makeUnauthenticatedRequest('confirmDevice', {
+	          DeviceKey: dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceKey,
+	          AccessToken: _this7.signInUserSession.getAccessToken().getJwtToken(),
+	          DeviceSecretVerifierConfig: deviceSecretVerifierConfig,
+	          DeviceName: navigator.userAgent
+	        }, function (errConfirm, dataConfirm) {
+	          if (errConfirm) {
+	            return callback.onFailure(errConfirm);
+	          }
+
+	          _this7.deviceKey = dataAuthenticate.AuthenticationResult.NewDeviceMetadata.DeviceKey;
+	          _this7.cacheDeviceKeyAndPassword();
+	          if (dataConfirm.UserConfirmationNecessary === true) {
+	            return callback.onSuccess(_this7.signInUserSession, dataConfirm.UserConfirmationNecessary);
+	          }
+	          return callback.onSuccess(_this7.signInUserSession);
+	        });
+	        return undefined;
 	      });
 	      return undefined;
 	    });
@@ -2117,6 +2352,33 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	    this.client.makeUnauthenticatedRequest('setUserSettings', {
 	      MFAOptions: mfaOptions,
+	      AccessToken: this.signInUserSession.getAccessToken().getJwtToken()
+	    }, function (err) {
+	      if (err) {
+	        return callback(err, null);
+	      }
+	      return callback(null, 'SUCCESS');
+	    });
+	    return undefined;
+	  };
+
+	  /**
+	   * This is used by an authenticated user to enable MFA for himself
+	   * @param {string[]} smsMfaSettings the sms mfa settings
+	   * @param {string[]} softwareTokenMfaSettings the software token mfa settings
+	   * @param {nodeCallback<string>} callback Called on success or error.
+	   * @returns {void}
+	   */
+
+
+	  CognitoUser.prototype.setUserMfaPreference = function setUserMfaPreference(smsMfaSettings, softwareTokenMfaSettings, callback) {
+	    if (this.signInUserSession == null || !this.signInUserSession.isValid()) {
+	      return callback(new Error('User is not authenticated'), null);
+	    }
+
+	    this.client.makeUnauthenticatedRequest('setUserMFAPreference', {
+	      SMSMfaSettings: smsMfaSettings,
+	      SoftwareTokenMfaSettings: softwareTokenMfaSettings,
 	      AccessToken: this.signInUserSession.getAccessToken().getJwtToken()
 	    }, function (err) {
 	      if (err) {
@@ -2299,10 +2561,12 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 	  CognitoUser.prototype.resendConfirmationCode = function resendConfirmationCode(callback) {
-	    this.client.makeUnauthenticatedRequest('resendConfirmationCode', {
+	    var jsonReq = {
 	      ClientId: this.pool.getClientId(),
 	      Username: this.username
-	    }, function (err, result) {
+	    };
+
+	    this.client.makeUnauthenticatedRequest('resendConfirmationCode', jsonReq, function (err, result) {
 	      if (err) {
 	        return callback(err, null);
 	      }
@@ -2332,6 +2596,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    var idTokenKey = keyPrefix + '.idToken';
 	    var accessTokenKey = keyPrefix + '.accessToken';
 	    var refreshTokenKey = keyPrefix + '.refreshToken';
+	    var clockDriftKey = keyPrefix + '.clockDrift';
 
 	    if (this.storage.getItem(idTokenKey)) {
 	      var idToken = new _CognitoIdToken2.default({
@@ -2343,11 +2608,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	      var refreshToken = new _CognitoRefreshToken2.default({
 	        RefreshToken: this.storage.getItem(refreshTokenKey)
 	      });
+	      var clockDrift = parseInt(this.storage.getItem(clockDriftKey), 0) || 0;
 
 	      var sessionData = {
 	        IdToken: idToken,
 	        AccessToken: accessToken,
-	        RefreshToken: refreshToken
+	        RefreshToken: refreshToken,
+	        ClockDrift: clockDrift
 	      };
 	      var cachedSession = new _CognitoUserSession2.default(sessionData);
 	      if (cachedSession.isValid()) {
@@ -2390,11 +2657,15 @@ return /******/ (function(modules) { // webpackBootstrap
 	      authParameters.DEVICE_KEY = this.deviceKey;
 	    }
 
-	    this.client.makeUnauthenticatedRequest('initiateAuth', {
+	    var jsonReq = {
 	      ClientId: this.pool.getClientId(),
 	      AuthFlow: 'REFRESH_TOKEN_AUTH',
 	      AuthParameters: authParameters
-	    }, function (err, authResult) {
+	    };
+	    if (this.getUserContextData()) {
+	      jsonReq.UserContextData = this.getUserContextData();
+	    }
+	    this.client.makeUnauthenticatedRequest('initiateAuth', jsonReq, function (err, authResult) {
 	      if (err) {
 	        if (err.code === 'NotAuthorizedException') {
 	          _this9.clearCachedTokens();
@@ -2425,11 +2696,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	    var idTokenKey = keyPrefix + '.' + this.username + '.idToken';
 	    var accessTokenKey = keyPrefix + '.' + this.username + '.accessToken';
 	    var refreshTokenKey = keyPrefix + '.' + this.username + '.refreshToken';
+	    var clockDriftKey = keyPrefix + '.' + this.username + '.clockDrift';
 	    var lastUserKey = keyPrefix + '.LastAuthUser';
 
 	    this.storage.setItem(idTokenKey, this.signInUserSession.getIdToken().getJwtToken());
 	    this.storage.setItem(accessTokenKey, this.signInUserSession.getAccessToken().getJwtToken());
 	    this.storage.setItem(refreshTokenKey, this.signInUserSession.getRefreshToken().getToken());
+	    this.storage.setItem(clockDriftKey, '' + this.signInUserSession.getClockDrift());
 	    this.storage.setItem(lastUserKey, this.username);
 	  };
 
@@ -2539,10 +2812,14 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 	  CognitoUser.prototype.forgotPassword = function forgotPassword(callback) {
-	    this.client.makeUnauthenticatedRequest('forgotPassword', {
+	    var jsonReq = {
 	      ClientId: this.pool.getClientId(),
 	      Username: this.username
-	    }, function (err, data) {
+	    };
+	    if (this.getUserContextData()) {
+	      jsonReq.UserContextData = this.getUserContextData();
+	    }
+	    this.client.makeUnauthenticatedRequest('forgotPassword', jsonReq, function (err, data) {
 	      if (err) {
 	        return callback.onFailure(err);
 	      }
@@ -2565,12 +2842,16 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 	  CognitoUser.prototype.confirmPassword = function confirmPassword(confirmationCode, newPassword, callback) {
-	    this.client.makeUnauthenticatedRequest('confirmForgotPassword', {
+	    var jsonReq = {
 	      ClientId: this.pool.getClientId(),
 	      Username: this.username,
 	      ConfirmationCode: confirmationCode,
 	      Password: newPassword
-	    }, function (err) {
+	    };
+	    if (this.getUserContextData()) {
+	      jsonReq.UserContextData = this.getUserContextData();
+	    }
+	    this.client.makeUnauthenticatedRequest('confirmForgotPassword', jsonReq, function (err) {
 	      if (err) {
 	        return callback.onFailure(err);
 	      }
@@ -2837,13 +3118,152 @@ return /******/ (function(modules) { // webpackBootstrap
 	    this.clearCachedTokens();
 	  };
 
+	  /**
+	   * This is used by a user trying to select a given MFA
+	   * @param {string} answerChallenge the mfa the user wants
+	   * @param {nodeCallback<string>} callback Called on success or error.
+	   * @returns {void}
+	   */
+
+
+	  CognitoUser.prototype.sendMFASelectionAnswer = function sendMFASelectionAnswer(answerChallenge, callback) {
+	    var _this12 = this;
+
+	    var challengeResponses = {};
+	    challengeResponses.USERNAME = this.username;
+	    challengeResponses.ANSWER = answerChallenge;
+
+	    var jsonReq = {
+	      ChallengeName: 'SELECT_MFA_TYPE',
+	      ChallengeResponses: challengeResponses,
+	      ClientId: this.pool.getClientId(),
+	      Session: this.Session
+	    };
+	    if (this.getUserContextData()) {
+	      jsonReq.UserContextData = this.getUserContextData();
+	    }
+	    this.client.makeUnauthenticatedRequest('respondToAuthChallenge', jsonReq, function (err, data) {
+	      if (err) {
+	        return callback.onFailure(err);
+	      }
+	      _this12.Session = data.Session;
+	      if (answerChallenge === 'SMS_MFA') {
+	        return callback.mfaRequired(data.challengeName, data.challengeParameters);
+	      }
+	      if (answerChallenge === 'SOFTWARE_TOKEN_MFA') {
+	        return callback.totpRequired(data.challengeName, data.challengeParameters);
+	      }
+	      return undefined;
+	    });
+	  };
+
+	  /**
+	   * This returns the user context data for advanced security feature.
+	   * @returns {void}
+	   */
+
+
+	  CognitoUser.prototype.getUserContextData = function getUserContextData() {
+	    var pool = this.pool;
+	    return pool.getUserContextData(this.username);
+	  };
+
+	  /**
+	   * This is used by an authenticated or a user trying to authenticate to associate a TOTP MFA
+	   * @param {nodeCallback<string>} callback Called on success or error.
+	   * @returns {void}
+	   */
+
+
+	  CognitoUser.prototype.associateSoftwareToken = function associateSoftwareToken(callback) {
+	    var _this13 = this;
+
+	    if (!(this.signInUserSession != null && this.signInUserSession.isValid())) {
+	      this.client.makeUnauthenticatedRequest('associateSoftwareToken', {
+	        Session: this.Session
+	      }, function (err, data) {
+	        if (err) {
+	          return callback.onFailure(err);
+	        }
+	        _this13.Session = data.Session;
+	        return callback.associateSecretCode(data.SecretCode);
+	      });
+	    } else {
+	      this.client.makeUnauthenticatedRequest('associateSoftwareToken', {
+	        AccessToken: this.signInUserSession.getAccessToken().getJwtToken()
+	      }, function (err, data) {
+	        if (err) {
+	          return callback.onFailure(err);
+	        }
+	        return callback.associateSecretCode(data.SecretCode);
+	      });
+	    }
+	  };
+
+	  /**
+	   * This is used by an authenticated or a user trying to authenticate to associate a TOTP MFA
+	   * @param {string} totpCode The MFA code entered by the user.
+	   * @param {string} friendlyDeviceName The device name we are assigning to the device.
+	   * @param {nodeCallback<string>} callback Called on success or error.
+	   * @returns {void}
+	   */
+
+
+	  CognitoUser.prototype.verifySoftwareToken = function verifySoftwareToken(totpCode, friendlyDeviceName, callback) {
+	    var _this14 = this;
+
+	    if (!(this.signInUserSession != null && this.signInUserSession.isValid())) {
+	      this.client.makeUnauthenticatedRequest('verifySoftwareToken', {
+	        Session: this.Session,
+	        UserCode: totpCode,
+	        FriendlyDeviceName: friendlyDeviceName
+	      }, function (err, data) {
+	        if (err) {
+	          return callback.onFailure(err);
+	        }
+	        _this14.Session = data.Session;
+	        var challengeResponses = {};
+	        challengeResponses.USERNAME = _this14.username;
+	        var jsonReq = {
+	          ChallengeName: 'MFA_SETUP',
+	          ClientId: _this14.pool.getClientId(),
+	          ChallengeResponses: challengeResponses,
+	          Session: _this14.Session
+	        };
+	        if (_this14.getUserContextData()) {
+	          jsonReq.UserContextData = _this14.getUserContextData();
+	        }
+	        _this14.client.makeUnauthenticatedRequest('respondToAuthChallenge', jsonReq, function (errRespond, dataRespond) {
+	          if (errRespond) {
+	            return callback.onFailure(errRespond);
+	          }
+	          _this14.signInUserSession = _this14.getCognitoUserSession(dataRespond.AuthenticationResult);
+	          _this14.cacheTokens();
+	          return callback.onSuccess(_this14.signInUserSession);
+	        });
+	        return undefined;
+	      });
+	    } else {
+	      this.client.makeUnauthenticatedRequest('verifySoftwareToken', {
+	        AccessToken: this.signInUserSession.getAccessToken().getJwtToken(),
+	        UserCode: totpCode,
+	        FriendlyDeviceName: friendlyDeviceName
+	      }, function (err, data) {
+	        if (err) {
+	          return callback.onFailure(err);
+	        }
+	        return callback(null, data);
+	      });
+	    }
+	  };
+
 	  return CognitoUser;
 	}();
 
 	exports.default = CognitoUser;
 
 /***/ }),
-/* 8 */
+/* 9 */
 /***/ (function(module, exports) {
 
 	'use strict';
@@ -2956,7 +3376,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	exports.default = CognitoUserAttribute;
 
 /***/ }),
-/* 9 */
+/* 10 */
 /***/ (function(module, exports) {
 
 	'use strict';
@@ -2986,15 +3406,17 @@ return /******/ (function(modules) { // webpackBootstrap
 	var CognitoUserSession = function () {
 	  /**
 	   * Constructs a new CognitoUserSession object
-	   * @param {string} IdToken The session's Id token.
-	   * @param {string=} RefreshToken The session's refresh token.
-	   * @param {string} AccessToken The session's access token.
+	   * @param {CognitoIdToken} IdToken The session's Id token.
+	   * @param {CognitoRefreshToken=} RefreshToken The session's refresh token.
+	   * @param {CognitoAccessToken} AccessToken The session's access token.
+	   * @param {int} ClockDrift The saved computer's clock drift or undefined to force calculation.
 	   */
 	  function CognitoUserSession() {
 	    var _ref = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {},
 	        IdToken = _ref.IdToken,
 	        RefreshToken = _ref.RefreshToken,
-	        AccessToken = _ref.AccessToken;
+	        AccessToken = _ref.AccessToken,
+	        ClockDrift = _ref.ClockDrift;
 
 	    _classCallCheck(this, CognitoUserSession);
 
@@ -3005,6 +3427,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    this.idToken = IdToken;
 	    this.refreshToken = RefreshToken;
 	    this.accessToken = AccessToken;
+	    this.clockDrift = ClockDrift === undefined ? this.calculateClockDrift() : ClockDrift;
 	  }
 
 	  /**
@@ -3035,16 +3458,38 @@ return /******/ (function(modules) { // webpackBootstrap
 	  };
 
 	  /**
+	   * @returns {int} the session's clock drift
+	   */
+
+
+	  CognitoUserSession.prototype.getClockDrift = function getClockDrift() {
+	    return this.clockDrift;
+	  };
+
+	  /**
+	   * @returns {int} the computer's clock drift
+	   */
+
+
+	  CognitoUserSession.prototype.calculateClockDrift = function calculateClockDrift() {
+	    var now = Math.floor(new Date() / 1000);
+	    var iat = Math.min(this.accessToken.getIssuedAt(), this.idToken.getIssuedAt());
+
+	    return now - iat;
+	  };
+
+	  /**
 	   * Checks to see if the session is still valid based on session expiry information found
-	   * in tokens and the current time
+	   * in tokens and the current time (adjusted with clock drift)
 	   * @returns {boolean} if the session is still valid
 	   */
 
 
 	  CognitoUserSession.prototype.isValid = function isValid() {
 	    var now = Math.floor(new Date() / 1000);
+	    var adjusted = now - this.clockDrift;
 
-	    return now < this.accessToken.getExpiration() && now < this.idToken.getExpiration();
+	    return adjusted < this.accessToken.getExpiration() && adjusted < this.idToken.getExpiration();
 	  };
 
 	  return CognitoUserSession;
@@ -3053,7 +3498,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	exports.default = CognitoUserSession;
 
 /***/ }),
-/* 10 */
+/* 11 */
 /***/ (function(module, exports) {
 
 	'use strict';
@@ -3128,7 +3573,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	exports.default = DateHelper;
 
 /***/ }),
-/* 11 */
+/* 12 */
 /***/ (function(module, exports) {
 
 	'use strict';
@@ -3248,13 +3693,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	exports.default = StorageHelper;
 
 /***/ }),
-/* 12 */
+/* 13 */
 /***/ (function(module, exports) {
 
-	module.exports = __WEBPACK_EXTERNAL_MODULE_12__;
+	module.exports = __WEBPACK_EXTERNAL_MODULE_13__;
 
 /***/ }),
-/* 13 */
+/* 14 */
 /***/ (function(module, exports) {
 
 	"use strict";
@@ -3347,22 +3792,22 @@ return /******/ (function(modules) { // webpackBootstrap
 	exports.default = AuthenticationDetails;
 
 /***/ }),
-/* 14 */
+/* 15 */
 /***/ (function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	exports.__esModule = true;
 
-	var _cognitoidentityserviceprovider = __webpack_require__(12);
+	var _cognitoidentityserviceprovider = __webpack_require__(13);
 
 	var _cognitoidentityserviceprovider2 = _interopRequireDefault(_cognitoidentityserviceprovider);
 
-	var _CognitoUser = __webpack_require__(7);
+	var _CognitoUser = __webpack_require__(8);
 
 	var _CognitoUser2 = _interopRequireDefault(_CognitoUser);
 
-	var _StorageHelper = __webpack_require__(11);
+	var _StorageHelper = __webpack_require__(12);
 
 	var _StorageHelper2 = _interopRequireDefault(_StorageHelper);
 
@@ -3393,6 +3838,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	   * @param {string} data.UserPoolId Cognito user pool id.
 	   * @param {string} data.ClientId User pool application client id.
 	   * @param {object} data.Storage Optional storage object.
+	   * @param {boolean} data.AdvancedSecurityDataCollectionFlag Optional:
+	   *        boolean flag indicating if the data collection is enabled
+	   *        to support cognito advanced security features. By default, this
+	   *        flag is set to true.
 	   */
 	  function CognitoUserPool(data) {
 	    _classCallCheck(this, CognitoUserPool);
@@ -3400,7 +3849,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	    var _ref = data || {},
 	        UserPoolId = _ref.UserPoolId,
 	        ClientId = _ref.ClientId,
-	        endpoint = _ref.endpoint;
+	        endpoint = _ref.endpoint,
+	        AdvancedSecurityDataCollectionFlag = _ref.AdvancedSecurityDataCollectionFlag;
 
 	    if (!UserPoolId || !ClientId) {
 	      throw new Error('Both UserPoolId and ClientId are required.');
@@ -3413,7 +3863,17 @@ return /******/ (function(modules) { // webpackBootstrap
 	    this.userPoolId = UserPoolId;
 	    this.clientId = ClientId;
 
-	    this.client = new _cognitoidentityserviceprovider2.default({ apiVersion: '2016-04-19', region: region, endpoint: endpoint });
+	    this.client = new _cognitoidentityserviceprovider2.default({
+	      apiVersion: '2016-04-19',
+	      region: region,
+	      endpoint: endpoint
+	    });
+
+	    /**
+	     * By default, AdvancedSecurityDataCollectionFlag is set to true,
+	     * if no input value is provided.
+	     */
+	    this.advancedSecurityDataCollectionFlag = AdvancedSecurityDataCollectionFlag !== false;
 
 	    this.storage = data.Storage || new _StorageHelper2.default().getStorage();
 	  }
@@ -3455,13 +3915,17 @@ return /******/ (function(modules) { // webpackBootstrap
 	  CognitoUserPool.prototype.signUp = function signUp(username, password, userAttributes, validationData, callback) {
 	    var _this = this;
 
-	    this.client.makeUnauthenticatedRequest('signUp', {
+	    var jsonReq = {
 	      ClientId: this.clientId,
 	      Username: username,
 	      Password: password,
 	      UserAttributes: userAttributes,
 	      ValidationData: validationData
-	    }, function (err, data) {
+	    };
+	    if (this.getUserContextData(username)) {
+	      jsonReq.UserContextData = this.getUserContextData(username);
+	    }
+	    this.client.makeUnauthenticatedRequest('signUp', jsonReq, function (err, data) {
 	      if (err) {
 	        return callback(err, null);
 	      }
@@ -3506,20 +3970,163 @@ return /******/ (function(modules) { // webpackBootstrap
 	    return null;
 	  };
 
+	  /**
+	   * This method returns the encoded data string used for cognito advanced security feature.
+	   * This would be generated only when developer has included the JS used for collecting the
+	   * data on their client. Please refer to documentation to know more about using AdvancedSecurity
+	   * features
+	   * @param {string} username the username for the context data
+	   * @returns {string} the user context data
+	   **/
+
+
+	  CognitoUserPool.prototype.getUserContextData = function getUserContextData(username) {
+	    if (typeof AmazonCognitoAdvancedSecurityData === 'undefined') {
+	      return undefined;
+	    }
+	    /* eslint-disable */
+	    var amazonCognitoAdvancedSecurityDataConst = AmazonCognitoAdvancedSecurityData;
+	    /* eslint-enable */
+
+	    if (this.advancedSecurityDataCollectionFlag) {
+	      var advancedSecurityData = amazonCognitoAdvancedSecurityDataConst.getData(username, this.userPoolId, this.clientId);
+	      if (advancedSecurityData) {
+	        var userContextData = {
+	          EncodedData: advancedSecurityData
+	        };
+	        return userContextData;
+	      }
+	    }
+	    return {};
+	  };
+
 	  return CognitoUserPool;
 	}();
 
 	exports.default = CognitoUserPool;
 
 /***/ }),
-/* 15 */
+/* 16 */
 /***/ (function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	exports.__esModule = true;
 
-	var _AuthenticationDetails = __webpack_require__(13);
+	var _jsCookie = __webpack_require__(18);
+
+	var Cookies = _interopRequireWildcard(_jsCookie);
+
+	function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+	/** @class */
+	var CookieStorage = function () {
+
+	  /**
+	   * Constructs a new CookieStorage object
+	   * @param {object} data Creation options.
+	   * @param {string} data.domain Cookies domain (mandatory).
+	   * @param {string} data.path Cookies path (default: '/')
+	   * @param {integer} data.expires Cookie expiration (in days, default: 365)
+	   * @param {boolean} data.secure Cookie secure flag (default: true)
+	   */
+	  function CookieStorage(data) {
+	    _classCallCheck(this, CookieStorage);
+
+	    this.domain = data.domain;
+	    if (data.path) {
+	      this.path = data.path;
+	    } else {
+	      this.path = '/';
+	    }
+	    if (Object.prototype.hasOwnProperty.call(data, 'expires')) {
+	      this.expires = data.expires;
+	    } else {
+	      this.expires = 365;
+	    }
+	    if (Object.prototype.hasOwnProperty.call(data, 'secure')) {
+	      this.secure = data.secure;
+	    } else {
+	      this.secure = true;
+	    }
+	  }
+
+	  /**
+	   * This is used to set a specific item in storage
+	   * @param {string} key - the key for the item
+	   * @param {object} value - the value
+	   * @returns {string} value that was set
+	   */
+
+
+	  CookieStorage.prototype.setItem = function setItem(key, value) {
+	    Cookies.set(key, value, {
+	      path: this.path,
+	      expires: this.expires,
+	      domain: this.domain,
+	      secure: this.secure
+	    });
+	    return Cookies.get(key);
+	  };
+
+	  /**
+	   * This is used to get a specific key from storage
+	   * @param {string} key - the key for the item
+	   * This is used to clear the storage
+	   * @returns {string} the data item
+	   */
+
+
+	  CookieStorage.prototype.getItem = function getItem(key) {
+	    return Cookies.get(key);
+	  };
+
+	  /**
+	   * This is used to remove an item from storage
+	   * @param {string} key - the key being set
+	   * @returns {string} value - value that was deleted
+	   */
+
+
+	  CookieStorage.prototype.removeItem = function removeItem(key) {
+	    return Cookies.remove(key, {
+	      path: this.path,
+	      domain: this.domain,
+	      secure: this.secure
+	    });
+	  };
+
+	  /**
+	   * This is used to clear the storage
+	   * @returns {string} nothing
+	   */
+
+
+	  CookieStorage.prototype.clear = function clear() {
+	    var cookies = Cookies.get();
+	    var index = void 0;
+	    for (index = 0; index < cookies.length; ++index) {
+	      Cookies.remove(cookies[index]);
+	    }
+	    return {};
+	  };
+
+	  return CookieStorage;
+	}();
+
+	exports.default = CookieStorage;
+
+/***/ }),
+/* 17 */
+/***/ (function(module, exports, __webpack_require__) {
+
+	'use strict';
+
+	exports.__esModule = true;
+
+	var _AuthenticationDetails = __webpack_require__(14);
 
 	Object.defineProperty(exports, 'AuthenticationDetails', {
 	  enumerable: true,
@@ -3555,7 +4162,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  }
 	});
 
-	var _CognitoRefreshToken = __webpack_require__(6);
+	var _CognitoRefreshToken = __webpack_require__(7);
 
 	Object.defineProperty(exports, 'CognitoRefreshToken', {
 	  enumerable: true,
@@ -3564,7 +4171,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  }
 	});
 
-	var _CognitoUser = __webpack_require__(7);
+	var _CognitoUser = __webpack_require__(8);
 
 	Object.defineProperty(exports, 'CognitoUser', {
 	  enumerable: true,
@@ -3573,7 +4180,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  }
 	});
 
-	var _CognitoUserAttribute = __webpack_require__(8);
+	var _CognitoUserAttribute = __webpack_require__(9);
 
 	Object.defineProperty(exports, 'CognitoUserAttribute', {
 	  enumerable: true,
@@ -3582,7 +4189,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  }
 	});
 
-	var _CognitoUserPool = __webpack_require__(14);
+	var _CognitoUserPool = __webpack_require__(15);
 
 	Object.defineProperty(exports, 'CognitoUserPool', {
 	  enumerable: true,
@@ -3591,7 +4198,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  }
 	});
 
-	var _CognitoUserSession = __webpack_require__(9);
+	var _CognitoUserSession = __webpack_require__(10);
 
 	Object.defineProperty(exports, 'CognitoUserSession', {
 	  enumerable: true,
@@ -3600,7 +4207,16 @@ return /******/ (function(modules) { // webpackBootstrap
 	  }
 	});
 
-	var _DateHelper = __webpack_require__(10);
+	var _CookieStorage = __webpack_require__(16);
+
+	Object.defineProperty(exports, 'CookieStorage', {
+	  enumerable: true,
+	  get: function get() {
+	    return _interopRequireDefault(_CookieStorage).default;
+	  }
+	});
+
+	var _DateHelper = __webpack_require__(11);
 
 	Object.defineProperty(exports, 'DateHelper', {
 	  enumerable: true,
@@ -3610,6 +4226,184 @@ return /******/ (function(modules) { // webpackBootstrap
 	});
 
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	// The version of crypto-browserify included by aws-sdk only
+	// checks for window.crypto, not window.msCrypto as used by
+	// IE 11 – so we set it explicitly here
+	if (typeof window !== 'undefined' && !window.crypto && window.msCrypto) {
+	  window.crypto = window.msCrypto;
+	}
+
+/***/ }),
+/* 18 */
+/***/ (function(module, exports, __webpack_require__) {
+
+	var __WEBPACK_AMD_DEFINE_FACTORY__, __WEBPACK_AMD_DEFINE_RESULT__;/*!
+	 * JavaScript Cookie v2.2.0
+	 * https://github.com/js-cookie/js-cookie
+	 *
+	 * Copyright 2006, 2015 Klaus Hartl & Fagner Brack
+	 * Released under the MIT license
+	 */
+	;(function (factory) {
+		var registeredInModuleLoader = false;
+		if (true) {
+			!(__WEBPACK_AMD_DEFINE_FACTORY__ = (factory), __WEBPACK_AMD_DEFINE_RESULT__ = (typeof __WEBPACK_AMD_DEFINE_FACTORY__ === 'function' ? (__WEBPACK_AMD_DEFINE_FACTORY__.call(exports, __webpack_require__, exports, module)) : __WEBPACK_AMD_DEFINE_FACTORY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+			registeredInModuleLoader = true;
+		}
+		if (true) {
+			module.exports = factory();
+			registeredInModuleLoader = true;
+		}
+		if (!registeredInModuleLoader) {
+			var OldCookies = window.Cookies;
+			var api = window.Cookies = factory();
+			api.noConflict = function () {
+				window.Cookies = OldCookies;
+				return api;
+			};
+		}
+	}(function () {
+		function extend () {
+			var i = 0;
+			var result = {};
+			for (; i < arguments.length; i++) {
+				var attributes = arguments[ i ];
+				for (var key in attributes) {
+					result[key] = attributes[key];
+				}
+			}
+			return result;
+		}
+
+		function init (converter) {
+			function api (key, value, attributes) {
+				var result;
+				if (typeof document === 'undefined') {
+					return;
+				}
+
+				// Write
+
+				if (arguments.length > 1) {
+					attributes = extend({
+						path: '/'
+					}, api.defaults, attributes);
+
+					if (typeof attributes.expires === 'number') {
+						var expires = new Date();
+						expires.setMilliseconds(expires.getMilliseconds() + attributes.expires * 864e+5);
+						attributes.expires = expires;
+					}
+
+					// We're using "expires" because "max-age" is not supported by IE
+					attributes.expires = attributes.expires ? attributes.expires.toUTCString() : '';
+
+					try {
+						result = JSON.stringify(value);
+						if (/^[\{\[]/.test(result)) {
+							value = result;
+						}
+					} catch (e) {}
+
+					if (!converter.write) {
+						value = encodeURIComponent(String(value))
+							.replace(/%(23|24|26|2B|3A|3C|3E|3D|2F|3F|40|5B|5D|5E|60|7B|7D|7C)/g, decodeURIComponent);
+					} else {
+						value = converter.write(value, key);
+					}
+
+					key = encodeURIComponent(String(key));
+					key = key.replace(/%(23|24|26|2B|5E|60|7C)/g, decodeURIComponent);
+					key = key.replace(/[\(\)]/g, escape);
+
+					var stringifiedAttributes = '';
+
+					for (var attributeName in attributes) {
+						if (!attributes[attributeName]) {
+							continue;
+						}
+						stringifiedAttributes += '; ' + attributeName;
+						if (attributes[attributeName] === true) {
+							continue;
+						}
+						stringifiedAttributes += '=' + attributes[attributeName];
+					}
+					return (document.cookie = key + '=' + value + stringifiedAttributes);
+				}
+
+				// Read
+
+				if (!key) {
+					result = {};
+				}
+
+				// To prevent the for loop in the first place assign an empty array
+				// in case there are no cookies at all. Also prevents odd result when
+				// calling "get()"
+				var cookies = document.cookie ? document.cookie.split('; ') : [];
+				var rdecode = /(%[0-9A-Z]{2})+/g;
+				var i = 0;
+
+				for (; i < cookies.length; i++) {
+					var parts = cookies[i].split('=');
+					var cookie = parts.slice(1).join('=');
+
+					if (!this.json && cookie.charAt(0) === '"') {
+						cookie = cookie.slice(1, -1);
+					}
+
+					try {
+						var name = parts[0].replace(rdecode, decodeURIComponent);
+						cookie = converter.read ?
+							converter.read(cookie, name) : converter(cookie, name) ||
+							cookie.replace(rdecode, decodeURIComponent);
+
+						if (this.json) {
+							try {
+								cookie = JSON.parse(cookie);
+							} catch (e) {}
+						}
+
+						if (key === name) {
+							result = cookie;
+							break;
+						}
+
+						if (!key) {
+							result[name] = cookie;
+						}
+					} catch (e) {}
+				}
+
+				return result;
+			}
+
+			api.set = api;
+			api.get = function (key) {
+				return api.call(api, key);
+			};
+			api.getJSON = function () {
+				return api.apply({
+					json: true
+				}, [].slice.call(arguments));
+			};
+			api.defaults = {};
+
+			api.remove = function (key, attributes) {
+				api(key, '', extend(attributes, {
+					expires: -1
+				}));
+			};
+
+			api.withConverter = init;
+
+			return api;
+		}
+
+		return init(function () {});
+	}));
+
 
 /***/ })
 /******/ ])
